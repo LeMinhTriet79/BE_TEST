@@ -1,12 +1,8 @@
 package com.minhtriet.appswp.entity;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
-
-import java.util.List;
+import lombok.*;
+import org.hibernate.annotations.Nationalized;
 
 @Entity
 @Table(name = "Coaches")
@@ -14,34 +10,38 @@ import java.util.List;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class Coach {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "CoachID")
     private long coachId;
 
-    @OneToOne
+    // UserID unique, liên kết 1-1 với User
+    @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "UserID", unique = true)
     private User user;
 
-    @Column(name = "FullName", nullable = false)
+    @Nationalized
+    @Column(name = "FullName", nullable = false, length = 255)
     private String fullName;
 
-    @Column(name = "Specialization")
+    @Nationalized
+    @Column(name = "Specialization", length = 255)
     private String specialization;
 
+    @Nationalized
     @Column(name = "Bio", columnDefinition = "NVARCHAR(MAX)")
     private String bio;
 
+    @Nationalized
     @Column(name = "Availability", columnDefinition = "NVARCHAR(MAX)")
     private String availability;
 
-    @Column(name = "ProfilePictureURL")
+    @Column(name = "ProfilePictureURL", length = 255)
     private String profilePictureUrl;
 
     @Column(name = "IsActive", nullable = false)
-    private boolean isActive;
-
-    @OneToMany(mappedBy = "coach")
-    private List<Consultation> consultations;
-} 
+    private boolean isActive = true;
+}

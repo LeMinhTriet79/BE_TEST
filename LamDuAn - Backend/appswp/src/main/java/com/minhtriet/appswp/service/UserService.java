@@ -4,8 +4,12 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.minhtriet.appswp.entity.User;
 import com.minhtriet.appswp.entity.VerificationToken;
+import com.minhtriet.appswp.entity.Coach;
+import com.minhtriet.appswp.entity.MembershipPackage;
 import com.minhtriet.appswp.repository.UserRepository;
 import com.minhtriet.appswp.repository.VerificationTokenRepository;
+import com.minhtriet.appswp.repository.CoachRepository;
+import com.minhtriet.appswp.repository.MembershipPackageRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -28,6 +32,12 @@ public class UserService {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private CoachRepository coachRepository;
+
+    @Autowired
+    private MembershipPackageRepository membershipPackageRepository;
 
     // ========================= ĐĂNG KÝ OTP 2 BƯỚC =========================
 
@@ -67,7 +77,7 @@ public class UserService {
         tokenRepository.save(vt);
 
         // 6. Gửi OTP qua email
-        emailService.sendOtpResetPassword(user.getEmail(), otp); // Tên hàm này dùng cho OTP, nếu bạn muốn custom nội dung thì tạo hàm riêng cho đăng ký
+        emailService.sendOtpResetPassword(user.getEmail(), otp); // Nếu muốn custom nội dung, tạo hàm riêng cho đăng ký
     }
 
     /**
@@ -179,6 +189,9 @@ public class UserService {
 
     public User getUserById(Long id) { return userRepository.findById(id).orElse(null); }
 
+    /**
+     * Tạo user mới, tự động dùng email làm username nếu username chưa được nhập.
+     */
     public User createNewUser(User user) {
         if (user.getUsername() == null || user.getUsername().trim().isEmpty()) {
             user.setUsername(user.getEmail());
@@ -186,6 +199,9 @@ public class UserService {
         return userRepository.save(user);
     }
 
+    /**
+     * Cập nhật user theo id, đồng bộ mapping với entity mới (KHÔNG dùng trường id primitive cho coach/package)
+     */
     public User updateUserById(Long id, User updatedUser) {
         return userRepository.findById(id)
                 .map(user -> {
@@ -201,14 +217,22 @@ public class UserService {
                     if (updatedUser.getProfilePictureUrl() != null) {
                         user.setProfilePictureUrl(updatedUser.getProfilePictureUrl());
                     }
-                    if (updatedUser.getCurrentMembershipPackageId() != null) {
-                        user.setCurrentMembershipPackageId(updatedUser.getCurrentMembershipPackageId());
+                    // Update MembershipPackage object nếu có
+                    if (updatedUser.getCurrentMembershipPackage() != null) {
+                        MembershipPackage mp = membershipPackageRepository.findById(
+                                updatedUser.getCurrentMembershipPackage().getPackageId()
+                        ).orElse(null);
+                        user.setCurrentMembershipPackage(mp);
                     }
                     if (updatedUser.getSubscriptionEndDate() != null) {
                         user.setSubscriptionEndDate(updatedUser.getSubscriptionEndDate());
                     }
-                    if (updatedUser.getCoachId() != 0) {
-                        user.setCoachId(updatedUser.getCoachId());
+                    // Update Coach object nếu có
+                    if (updatedUser.getCoach() != null) {
+                        Coach coach = coachRepository.findById(
+                                updatedUser.getCoach().getCoachId()
+                        ).orElse(null);
+                        user.setCoach(coach);
                     }
                     if (updatedUser.getRole() != null && !updatedUser.getRole().trim().isEmpty()) {
                         user.setRole(updatedUser.getRole());
@@ -269,11 +293,17 @@ public class UserService {
         return email != null && email.matches("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$");
     }
 
+    /**
+     * Lấy tất cả user đã được gán coach (coach != null)
+     */
     public List<User> getUsersWithCoach() {
-        return userRepository.findByCoachIdIsNotNull();
+        return userRepository.findByCoachIsNotNull();
     }
 
-    public List<User> getUsersByCoachId(Long coachId) {
-        return userRepository.findByCoachId(coachId);
+    /**
+     * Lấy tất cả user thuộc coach cụ thể (theo Coach object)
+     */
+    public List<User> getUsersByCoach(Coach coach) {
+        return userRepository.findByCoach(coach);
     }
 }

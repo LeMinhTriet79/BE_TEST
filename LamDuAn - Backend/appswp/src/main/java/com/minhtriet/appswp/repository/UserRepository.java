@@ -1,38 +1,43 @@
 package com.minhtriet.appswp.repository;
 
 import com.minhtriet.appswp.entity.User;
+import com.minhtriet.appswp.entity.Coach;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
 
+/**
+ * Repository thao tác với bảng Users.
+ * Tích hợp nhiều hàm tìm kiếm phục vụ nghiệp vụ đăng nhập, phân quyền, tìm theo coach,...
+ */
 @Repository
 public interface UserRepository extends JpaRepository<User, Long> {
 
-    // Tìm user theo username - QUAN TRỌNG cho đăng nhập
+    // Tìm user theo username (cho đăng nhập)
     User findByUsername(String username);
 
-    // Tìm user theo email - QUAN TRỌNG cho đăng nhập/đăng ký
+    // Tìm user theo email (cho đăng nhập/đăng ký)
     User findByEmail(String email);
 
-    // Lấy users theo role - để phân quyền
+    // Lấy users theo role (phân quyền: member, admin, coach)
     List<User> findByRole(String role);
 
-    // Kiểm tra username đã tồn tại - QUAN TRỌNG cho đăng ký
+    // Kiểm tra username đã tồn tại (cho đăng ký)
     boolean existsByUsername(String username);
 
-    // Kiểm tra email đã tồn tại - QUAN TRỌNG cho đăng ký
+    // Kiểm tra email đã tồn tại (cho đăng ký)
     boolean existsByEmail(String email);
 
-    // Lấy users có coach (coachId không null)
-    List<User> findByCoachIdIsNotNull();
+    // Lấy users có coach (coach object không null)
+    List<User> findByCoachIsNotNull();
 
-    // Lấy users theo coach ID cụ thể
-    List<User> findByCoachId(Long coachId);
+    // Lấy users theo coach cụ thể
+    List<User> findByCoach(Coach coach);
 
-    // THÊM MỚI: Tìm theo username và email (cho đăng nhập linh hoạt)
+    // Tìm user theo username hoặc email (cho đăng nhập linh hoạt)
     User findByUsernameOrEmail(String username, String email);
 
-    // THÊM MỚI: Lấy users đang active (có thể thêm field isActive sau)
-    // List<User> findByIsActiveTrue();
+    // Có thể bổ sung hàm lấy users đang enabled
+    // List<User> findByEnabledTrue();
 }

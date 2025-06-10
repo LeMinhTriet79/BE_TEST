@@ -1,7 +1,8 @@
 package com.minhtriet.appswp.controller;
 
 import com.minhtriet.appswp.entity.User;
-import com.minhtriet.appswp.repository.UserRepository;
+import com.minhtriet.appswp.entity.Coach;
+import com.minhtriet.appswp.repository.CoachRepository;
 import com.minhtriet.appswp.service.UserService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,7 +13,7 @@ import java.util.List;
 
 /**
  * Controller quản lý user (chỉ ADMIN mới được thao tác).
- * KHÔNG dùng cho đăng nhập/đăng ký (xem AuthAPI)
+ * KHÔNG dùng cho đăng nhập/đăng ký (xem AuthAPI riêng).
  */
 @RestController
 public class UserAPI {
@@ -21,9 +22,9 @@ public class UserAPI {
     private UserService userService;
 
     @Autowired
-    private UserRepository userRepository;
+    private CoachRepository coachRepository;
 
-    // ============= CRUD CƠ BẢN =============
+    // =================== CRUD CƠ BẢN ===================
 
     /**
      * Lấy danh sách toàn bộ user
@@ -82,7 +83,7 @@ public class UserAPI {
         return ResponseEntity.notFound().build();
     }
 
-    // ========== TRA CỨU ĐẶC BIỆT ===========
+    // =================== TRA CỨU ĐẶC BIỆT ===================
 
     /**
      * Lấy user theo username
@@ -117,8 +118,10 @@ public class UserAPI {
     }
 
     /**
-     * Lấy tất cả user có coachId != null (user đã được gán coach)
+     * Lấy tất cả user có coach (user đã được gán coach)
      * GET: /api/user/with-coach
+     *
+     * Sử dụng hàm findByCoachIsNotNull() trong UserRepository
      */
     @GetMapping("/api/user/with-coach")
     public ResponseEntity<List<User>> getUsersWithCoach() {
@@ -127,12 +130,17 @@ public class UserAPI {
     }
 
     /**
-     * Lấy user theo coachId (tất cả user do coach quản lý)
+     * Lấy user theo coachId (tất cả user do coach quản lý).
      * GET: /api/user/coach/{coachId}
+     *
+     * Đúng mapping mới: Tìm Coach object rồi lấy list User theo coach.
      */
     @GetMapping("/api/user/coach/{coachId}")
     public ResponseEntity<List<User>> getUsersByCoachId(@PathVariable Long coachId) {
-        List<User> users = userService.getUsersByCoachId(coachId);
+        Coach coach = coachRepository.findById(coachId).orElse(null);
+        if (coach == null) return ResponseEntity.notFound().build();
+
+        List<User> users = userService.getUsersByCoach(coach);
         return ResponseEntity.ok(users);
     }
 

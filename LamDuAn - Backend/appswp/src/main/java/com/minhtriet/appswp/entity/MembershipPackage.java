@@ -1,12 +1,9 @@
 package com.minhtriet.appswp.entity;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
+import org.hibernate.annotations.Nationalized;
 
-import java.math.BigDecimal;
 import java.util.List;
 
 @Entity
@@ -15,27 +12,32 @@ import java.util.List;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class MembershipPackage {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "PackageID")
     private long packageId;
 
-    @Column(name = "PackageName", nullable = false, unique = true)
+    @Nationalized
+    @Column(name = "PackageName", nullable = false, unique = true, length = 255)
     private String packageName;
 
-    @Column(name = "Price", nullable = false, precision = 10, scale = 2)
-    private BigDecimal price;
+    @Column(name = "Price", nullable = false)
+    private double price;
 
     @Column(name = "DurationDays", nullable = false)
     private int durationDays;
 
+    @Nationalized
     @Column(name = "Description", columnDefinition = "NVARCHAR(MAX)")
     private String description;
 
     @Column(name = "IsActive", nullable = false)
-    private boolean isActive;
+    private boolean isActive = true;
 
-    @OneToMany(mappedBy = "membershipPackage")
-    private List<Payment> payments;
-} 
+    // OneToMany: Lấy danh sách user đang dùng gói này (không bắt buộc)
+    @OneToMany(mappedBy = "currentMembershipPackage")
+    private List<User> users;
+}
