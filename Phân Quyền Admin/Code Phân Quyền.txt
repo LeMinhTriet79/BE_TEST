@@ -1,0 +1,140 @@
+Tôi sẽ hướng dẫn và cung cấp luôn bản MembershipPackageController phân quyền chỉ admin mới được tạo/sửa/xoá gói (FE vẫn lấy danh sách bình thường, không cần login).
+
+Giả định đơn giản nhất (thực tế áp dụng tốt):
+Đã có đăng nhập, lưu role trong UserDetails (Spring Security).
+
+Đăng nhập trả về JWT token, chứa role "ROLE_ADMIN" hoặc "ROLE_USER".
+
+Bạn đang dùng Spring Security (rất phổ biến cho backend hiện đại).
+
+Bước 1. Bổ sung SecurityConfig (nếu chưa có)
+Nếu bạn đã có cấu hình Spring Security, bỏ qua bước này.
+Nếu chưa, đây là cấu hình tối thiểu để bật security + role:
+
+java
+Sao chép
+// package com.minhtriet.appswp.config;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.web.SecurityFilterChain;
+
+@EnableWebSecurity
+public class SecurityConfig {
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http
+            .csrf().disable()
+            .authorizeHttpRequests()
+                .requestMatchers("/api/membership-packages", "/api/membership-packages/**").permitAll()
+                .requestMatchers("/api/membership-packages/**").hasRole("ADMIN")
+                .anyRequest().authenticated()
+            .and()
+            .httpBasic(); // Hoặc JWT, tùy bạn dùng gì
+        return http.build();
+    }
+}
+Tùy bạn có phân biệt token/JWT không, cấu hình sẽ khác chút. Nếu dùng Spring Security mặc định thì code trên đủ test nhanh.
+
+Bước 2. Phân quyền ở Controller bằng Annotation
+Spring Security hỗ trợ annotation @PreAuthorize.
+Bạn chỉ cần thêm vào method cần phân quyền, VD:
+
+java
+Sao chép
+import org.springframework.security.access.prepost.PreAuthorize;
+MembershipPackageController chỉ cho ADMIN tạo/sửa/xoá:
+java
+Sao chép
+package com.minhtriet.appswp.controller;
+
+import com.minhtriet.appswp.entity.MembershipPackage;
+import com.minhtriet.appswp.repository.MembershipPackageRepository;
+import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/membership-packages")
+@CrossOrigin // Cho phép FE gọi trực tiếp
+public class MembershipPackageController {
+
+    @Autowired
+    private MembershipPackageRepository membershipPackageRepository;
+
+    @GetMapping
+    public ResponseEntity<List<MembershipPackage>> getAllPackages() {
+        List<MembershipPackage> packages = membershipPackageRepository.findAll();
+        return ResponseEntity.ok(packages);
+    }
+
+    @GetMapping("/active")
+    public ResponseEntity<List<MembershipPackage>> getActivePackages() {
+        List<MembershipPackage> activePackages = membershipPackageRepository.findByIsActiveTrue();
+        return ResponseEntity.ok(activePackages);
+    }
+
+    @GetMapping("/{packageId}")
+    public ResponseEntity<MembershipPackage> getPackageById(@PathVariable Long packageId) {
+        return membershipPackageRepository.findById(packageId)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    /***
+     * CHỈ ADMIN ĐƯỢC TẠO GÓI
+     */
+    @PreAuthorize("hasRole('ADMIN')")
+    @PostMapping
+    public ResponseEntity<MembershipPackage> createPackage(@Valid @RequestBody MembershipPackage membershipPackage) {
+        MembershipPackage saved = membershipPackageRepository.save(membershipPackage);
+        return ResponseEntity.ok(saved);
+    }
+
+    /***
+     * CHỈ ADMIN ĐƯỢC SỬA GÓI
+     */
+    @PreAuthorize("hasRole('ADMIN')")
+    @PutMapping("/{packageId}")
+    public ResponseEntity<MembershipPackage> updatePackage(
+            @PathVariable Long packageId,
+            @Valid @RequestBody MembershipPackage updatedPackage) {
+        return membershipPackageRepository.findById(packageId)
+                .map(pkg -> {
+                    pkg.setPackageName(updatedPackage.getPackageName());
+                    pkg.setPrice(updatedPackage.getPrice());
+                    pkg.setDurationDays(updatedPackage.getDurationDays());
+                    pkg.setDescription(updatedPackage.getDescription());
+                    pkg.setActive(updatedPackage.isActive());
+                    MembershipPackage saved = membershipPackageRepository.save(pkg);
+                    return ResponseEntity.ok(saved);
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    /***
+     * CHỈ ADMIN ĐƯỢC XOÁ GÓI
+     */
+    @PreAuthorize("hasRole('ADMIN')")
+    @DeleteMapping("/{packageId}")
+    public ResponseEntity<Void> deletePackage(@PathVariable Long packageId) {
+        return membershipPackageRepository.findById(packageId)
+                .map(pkg -> {
+                    membershipPackageRepository.delete(pkg);
+                    return ResponseEntity.noContent().<Void>build();
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+}
+Tóm lại:
+Tất cả các hàm tạo/sửa/xoá đều thêm @PreAuthorize("hasRole('ADMIN')")
+
+FE chỉ GET danh sách/chi tiết thì ai cũng được truy cập.
+
+Nếu user không phải admin mà gọi POST/PUT/DELETE sẽ trả về 403 FORBIDDEN.
+
