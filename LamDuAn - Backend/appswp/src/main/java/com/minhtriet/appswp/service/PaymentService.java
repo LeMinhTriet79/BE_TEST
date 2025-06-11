@@ -24,35 +24,29 @@ public class PaymentService {
 
     @Transactional
     public Payment createPayment(PaymentRequestDTO dto) {
-        // Lấy User và Package từ DB
+        // 1. Lấy User và Package từ DB
         User user = userRepository.findById(dto.getUserId())
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new RuntimeException("User không tồn tại"));
 
         MembershipPackage membershipPackage = membershipPackageRepository.findById(dto.getPackageId())
-                .orElseThrow(() -> new RuntimeException("Package not found"));
+                .orElseThrow(() -> new RuntimeException("Gói thành viên không tồn tại"));
 
-        // Tạo record payment
+        // 2. Tạo bản ghi Payment mới, set status luôn là "success"
         Payment payment = Payment.builder()
                 .user(user)
                 .membershipPackage(membershipPackage)
                 .amount(dto.getAmount())
                 .paymentMethod(dto.getPaymentMethod())
                 .transactionId(dto.getTransactionId())
-                .status("pending")
+                .status("success") // đã thanh toán thành công
                 .paymentDate(LocalDateTime.now())
                 .build();
-
         paymentRepository.save(payment);
 
-        // Giả lập luôn việc thanh toán thành công (tùy nghiệp vụ tích hợp real payment, bạn sẽ xác nhận sau)
-        // Nếu thành công, update User
-        payment.setStatus("success");
-        paymentRepository.save(payment);
-
-        // Cập nhật User: gán gói thành viên mới + thời hạn
+        // 3. Gán gói thành viên mới cho User
         user.setCurrentMembershipPackage(membershipPackage);
 
-        // Tính toán ngày hết hạn mới (today + durationDays của package)
+        // 4. Tính ngày hết hạn mới = hôm nay + durationDays của package
         LocalDate endDate = LocalDate.now().plusDays(membershipPackage.getDurationDays());
         user.setSubscriptionEndDate(endDate);
 

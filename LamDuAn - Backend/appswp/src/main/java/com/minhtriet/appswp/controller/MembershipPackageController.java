@@ -1,5 +1,6 @@
 package com.minhtriet.appswp.controller;
 
+import com.minhtriet.appswp.dto.MembershipPackageDTO;
 import com.minhtriet.appswp.entity.MembershipPackage;
 import com.minhtriet.appswp.service.MembershipPackageService;
 import jakarta.validation.Valid;
@@ -17,23 +18,27 @@ public class MembershipPackageController {
     @Autowired
     private MembershipPackageService membershipPackageService;
 
+    // GET: /api/membership-packages (trả về DTO)
     @GetMapping
-    public ResponseEntity<List<MembershipPackage>> getAllPackages() {
-        return ResponseEntity.ok(membershipPackageService.getAllPackages());
+    public ResponseEntity<List<MembershipPackageDTO>> getAllPackages() {
+        return ResponseEntity.ok(membershipPackageService.getAllPackagesDTO());
     }
 
+    // GET: /api/membership-packages/active (trả về DTO)
     @GetMapping("/active")
-    public ResponseEntity<List<MembershipPackage>> getActivePackages() {
-        return ResponseEntity.ok(membershipPackageService.getActivePackages());
+    public ResponseEntity<List<MembershipPackageDTO>> getActivePackages() {
+        return ResponseEntity.ok(membershipPackageService.getActivePackagesDTO());
     }
 
+    // GET: /api/membership-packages/{packageId} (trả về DTO)
     @GetMapping("/{packageId}")
-    public ResponseEntity<MembershipPackage> getPackageById(@PathVariable Long packageId) {
-        return membershipPackageService.getPackageById(packageId)
+    public ResponseEntity<MembershipPackageDTO> getPackageById(@PathVariable Long packageId) {
+        return membershipPackageService.getPackageByIdDTO(packageId)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    // POST/PUT vẫn nhận/trả entity cho admin quản lý, không ảnh hưởng tới FE lấy danh sách
     @PostMapping
     public ResponseEntity<MembershipPackage> createPackage(@Valid @RequestBody MembershipPackage membershipPackage) {
         MembershipPackage saved = membershipPackageService.createPackage(membershipPackage);
