@@ -2,22 +2,26 @@ package com.minhtriet.appswp.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.minhtriet.appswp.entity.User;
-import com.minhtriet.appswp.entity.VerificationToken;
-import com.minhtriet.appswp.repository.VerificationTokenRepository;
 import com.minhtriet.appswp.repository.UserRepository;
+import com.minhtriet.appswp.repository.VerificationTokenRepository;
 import com.minhtriet.appswp.service.UserService;
+import com.minhtriet.appswp.util.JwtUtil;
+import com.minhtriet.appswp.dto.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.*;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 
 /**
  * API xác thực/đăng nhập/đăng ký/quên mật khẩu bằng OTP 4 số gửi về email.
  * - Đăng ký: Gửi OTP về email, nhập OTP xác thực mới lưu user.
  * - Quên mật khẩu: Gửi OTP về email, nhập OTP xác nhận mới đổi mật khẩu.
+ * - Đăng nhập: Trả về JWT để FE sử dụng các API protected.
  */
 @RestController
 @RequestMapping("/api/auth")
@@ -34,6 +38,15 @@ public class AuthAPI {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private AuthenticationManager authenticationManager;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private JwtUtil jwtUtil;
 
     // ===================== ĐĂNG KÝ 2 BƯỚC BẰNG OTP =======================
 
@@ -61,10 +74,10 @@ public class AuthAPI {
             User user = new User();
             user.setFullName(request.getFullName());
             user.setEmail(request.getEmail());
-            user.setPasswordHash(request.getPassword());
+            user.setPasswordHash(passwordEncoder.encode(request.getPassword())); // Băm mật khẩu
             user.setUsername(request.getEmail());
             user.setRole("member");
-            userService.registerUserWithOtp(user); // Sửa lại hàm BE, flow dùng OTP
+            userService.registerUserWithOtp(user);
 
             response.put("success", true);
             response.put("message", "OTP đã được gửi về email. Vui lòng kiểm tra email để xác thực!");
@@ -82,6 +95,8 @@ public class AuthAPI {
      */
     @PostMapping("/register-verify-otp")
     public ResponseEntity<Map<String, Object>> verifyRegisterOtp(@RequestBody VerifyOtpRequest request) {
+        System.out.println("EMAIL: " + request.getEmail());
+        System.out.println("OTP: " + request.getOtp());
         Map<String, Object> response = new HashMap<>();
         boolean ok = userService.verifyOtpAndRegister(request.getEmail(), request.getOtp());
         if (ok) {
@@ -93,46 +108,52 @@ public class AuthAPI {
             response.put("message", "OTP không đúng hoặc đã hết hạn!");
             return ResponseEntity.badRequest().body(response);
         }
+
     }
 
     // ===================== ĐĂNG NHẬP =======================
 
+    /**
+     * Đăng nhập bằng email & password.
+     * Nếu đúng, trả về JWT token + user info cho FE.
+     */
     @PostMapping("/login")
-    public ResponseEntity<Map<String, Object>> login(@RequestBody LoginRequest request) {
-        Map<String, Object> response = new HashMap<>();
+    public ResponseEntity<?> login(@RequestBody LoginRequest request) {
         try {
+            // Kiểm tra user tồn tại và đã xác thực email
             User user = userService.getUserByEmail(request.getEmail());
             if (user == null) {
-                response.put("success", false);
-                response.put("message", "Email không tồn tại");
-                return ResponseEntity.badRequest().body(response);
+                return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Email không tồn tại"));
             }
             if (!user.isEnabled()) {
-                response.put("success", false);
-                response.put("message", "Tài khoản chưa xác thực hoặc chưa hoàn tất đăng ký OTP!");
-                return ResponseEntity.badRequest().body(response);
+                return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Tài khoản chưa xác thực hoặc chưa hoàn tất đăng ký OTP!"));
             }
-            if (!user.getPasswordHash().equals(request.getPassword())) {
-                response.put("success", false);
-                response.put("message", "Mật khẩu không đúng");
-                return ResponseEntity.badRequest().body(response);
+            // Kiểm tra mật khẩu (BCrypt)
+            if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
+                return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Mật khẩu không đúng"));
             }
+
+            // Xác thực qua Security để sinh JWT
+            Authentication authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(user.getUsername(), request.getPassword())
+            );
+
+            // Sinh token JWT
+            String token = jwtUtil.generateToken(user.getUsername());
+
             userService.updateLastLoginDate(user.getUserId());
 
-            response.put("success", true);
-            response.put("message", "Đăng nhập thành công");
-            response.put("user", Map.of(
-                    "id", user.getUserId(),
-                    "fullName", user.getFullName(),
-                    "email", user.getEmail(),
-                    "role", user.getRole(),
-                    "profilePictureUrl", user.getProfilePictureUrl() != null ? user.getProfilePictureUrl() : ""
+            // Trả về token + user info cho FE
+            return ResponseEntity.ok(new LoginResponse(
+                    token,
+                    user.getUserId(),
+                    user.getFullName(),
+                    user.getEmail(),
+                    user.getRole(),
+                    user.getProfilePictureUrl()
             ));
-            return ResponseEntity.ok(response);
         } catch (Exception e) {
-            response.put("success", false);
-            response.put("message", "Đăng nhập thất bại: " + e.getMessage());
-            return ResponseEntity.badRequest().body(response);
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Đăng nhập thất bại: " + e.getMessage()));
         }
     }
 
@@ -143,7 +164,7 @@ public class AuthAPI {
      */
     @PostMapping("/forgot-password")
     public ResponseEntity<Map<String, Object>> forgotPassword(@RequestBody ForgotPasswordOtpRequest req) {
-        userService.sendPasswordResetOtp(req.getEmail(), req.getNewPassword());
+        userService.sendPasswordResetOtp(req.getEmail(), passwordEncoder.encode(req.getNewPassword()));
         return ResponseEntity.ok(Map.of(
                 "success", true,
                 "message", "Nếu email hợp lệ, mã OTP đã được gửi về email. Hãy kiểm tra hộp thư!"
@@ -161,53 +182,5 @@ public class AuthAPI {
         } else {
             return ResponseEntity.badRequest().body(Map.of("success", false, "message", "OTP không đúng hoặc đã hết hạn!"));
         }
-    }
-
-    // =================== DTO ====================
-
-    public static class RegisterRequest {
-        private String fullName;
-        private String email;
-        private String password;
-        private String confirmPassword;
-        public RegisterRequest() {}
-        public String getFullName() { return fullName; }
-        public void setFullName(String fullName) { this.fullName = fullName; }
-        public String getEmail() { return email; }
-        public void setEmail(String email) { this.email = email; }
-        public String getPassword() { return password; }
-        public void setPassword(String password) { this.password = password; }
-        public String getConfirmPassword() { return confirmPassword; }
-        public void setConfirmPassword(String confirmPassword) { this.confirmPassword = confirmPassword; }
-    }
-
-    public static class LoginRequest {
-        private String email;
-        private String password;
-        public LoginRequest() {}
-        public String getEmail() { return email; }
-        public void setEmail(String email) { this.email = email; }
-        public String getPassword() { return password; }
-        public void setPassword(String password) { this.password = password; }
-    }
-
-    public static class ForgotPasswordOtpRequest {
-        private String email;
-        private String newPassword;
-        public ForgotPasswordOtpRequest() {}
-        public String getEmail() { return email; }
-        public void setEmail(String email) { this.email = email; }
-        public String getNewPassword() { return newPassword; }
-        public void setNewPassword(String newPassword) { this.newPassword = newPassword; }
-    }
-
-    public static class VerifyOtpRequest {
-        private String email;
-        private String otp;
-        public VerifyOtpRequest() {}
-        public String getEmail() { return email; }
-        public void setEmail(String email) { this.email = email; }
-        public String getOtp() { return otp; }
-        public void setOtp(String otp) { this.otp = otp; }
     }
 }

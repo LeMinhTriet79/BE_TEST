@@ -16,12 +16,15 @@ public class PaymentController {
     private PaymentService paymentService;
 
     /**
-     * API thanh toán gói thành viên.
      * FE truyền vào userId, packageId, amount, paymentMethod, transactionId (nếu có).
      */
     @PostMapping
-    public ResponseEntity<Payment> createPayment(@RequestBody PaymentRequestDTO paymentRequest) {
-        Payment payment = paymentService.createPayment(paymentRequest);
-        return ResponseEntity.ok(payment);
+    public ResponseEntity<?> createPayment(@RequestBody PaymentRequestDTO paymentRequest) {
+        try {
+            Payment payment = paymentService.createPayment(paymentRequest);
+            return ResponseEntity.ok(payment); // trả lại Payment JSON cho FE
+        } catch (RuntimeException ex) {
+            return ResponseEntity.badRequest().body(ex.getMessage());
+        }
     }
 }
